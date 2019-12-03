@@ -1,0 +1,53 @@
+{
+  "name": "generator-demo",
+  "version": "0.0.1",
+  "description": "A generator demo used by Yeoman",
+  "keywords": [
+    "yeoman-generator",
+    "demo"
+  ],
+  "homepage": "https://github.com/upcwangying/generator-demo",
+  "bugs": "https://github.com/upcwangying/generator-demo/issues",
+  "author": {
+    "name": "Ying Wang",
+    "email": "upcwangying@gmail.com",
+    "url": "https://github.com/upcwangying"
+  },
+  "main": "app/index.js",
+  "files": [
+    "app",
+    "router"
+  ],
+  "license": "MIT",
+  "repository": "upcwangying/generator-demo",
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "prettier --write",
+      "git add"
+    ]
+  },
+  "dependencies": {
+    "yeoman-generator": "^1.0.0"
+  },
+  "peerDependencies": {
+    "yo": ">=1.0.0"
+  },
+  "engines": {
+    "node": ">=8"
+  },
+  "devDependencies": {
+    "eslint": "^6.7.2",
+    "eslint-config-prettier": "^6.7.0",
+    "eslint-plugin-import": "^2.18.2",
+    "eslint-plugin-prettier": "^3.1.1",
+    "husky": "^3.1.0",
+    "lint-staged": "^9.5.0",
+    "mocha": "^6.2.2",
+    "prettier": "^1.19.1"
+  }
+}
