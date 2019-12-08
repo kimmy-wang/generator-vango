@@ -29,7 +29,7 @@
     }
   },
   "lint-staged": {
-    "*.js": [
+    "/**/!(.templates)/**/*.js": [
       "prettier --write",
       "git add"
     ]
