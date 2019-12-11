@@ -1,27 +1,24 @@
 /*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
+ * Copyright (C) upcwangying.com. All rights reserved.
  *--------------------------------------------------------*/
 'use strict'
 
-let Generator = require('yeoman-generator')
-let yosay = require('yosay')
+const Generator = require('yeoman-generator')
+const yosay = require('yosay')
+const camelCase = require('camelcase')
 
-let path = require('path')
-let validator = require('./validator')
-let env = require('./env')
-let childProcess = require('child_process')
-let chalk = require('chalk')
+const path = require('path')
+const validator = require('../libs/validators')
+const chalk = require('chalk')
 
 module.exports = class extends Generator {
   constructor(args, opts) {
     super(args, opts)
-    this.option('extensionType', { type: String })
-    this.option('extensionName', { type: String })
-    this.option('extensionDescription', { type: String })
-    this.option('extensionDisplayName', { type: String })
-
-    this.option('extensionParam', { type: String })
-    this.option('extensionParam2', { type: String })
+    this.option('type', { type: String })
+    this.option('name', { type: String })
+    this.option('description', { type: String })
+    this.option('author', { type: String })
+    this.option('license', { type: String })
 
     this.extensionConfig = Object.create(null)
     this.extensionConfig.installDependencies = false
@@ -29,25 +26,19 @@ module.exports = class extends Generator {
 
   initializing() {
     // Welcome
-    this.log(yosay('Welcome to the Visual Studio Code Extension generator!'))
-
-    // evaluateEngineVersion
-    let extensionConfig = this.extensionConfig
-    return env.getLatestVSCodeVersion().then(version => {
-      extensionConfig.vsCodeEngine = version
-    })
+    this.log(yosay('Welcome to the vango generator!'))
   }
 
   prompting() {
-    let generator = this
-    let prompts = {
-      // Ask for extension type
+    const generator = this
+    const prompts = {
+      // 1. Ask for type.
       askForType: () => {
-        let extensionType = generator.options['extensionType']
+        let extensionType = generator.options['type']
         if (extensionType) {
-          let extensionTypes = ['command-js', 'extensionpack']
+          let extensionTypes = ['plugin', 'loader']
           if (extensionTypes.indexOf(extensionType) !== -1) {
-            generator.extensionConfig.type = 'ext-' + extensionType
+            generator.extensionConfig.type = `vango-${extensionType}`
           } else {
             generator.log(
               'Invalid extension type: ' +
@@ -63,15 +54,15 @@ module.exports = class extends Generator {
           .prompt({
             type: 'list',
             name: 'type',
-            message: 'What type of extension do you want to create?',
+            message: 'What type of project do you want to create?',
             choices: [
               {
-                name: 'New Extension (JavaScript)',
-                value: 'ext-command-js',
+                name: 'New Plugin',
+                value: 'vango-plugin',
               },
               {
-                name: 'New Extension Pack',
-                value: 'ext-extensionpack',
+                name: 'New Loader',
+                value: 'vango-loader',
               },
             ],
           })
@@ -80,113 +71,36 @@ module.exports = class extends Generator {
           })
       },
 
-      askForExtensionPackInfo: () => {
-        if (generator.extensionConfig.type !== 'ext-extensionpack') {
+      // 2. Ask for name.
+      askForProjectName: () => {
+        const name = generator.options['name']
+        if (name) {
+          generator.extensionConfig.name = name
+          generator.extensionConfig.displayName = camelCase(name, { pascalCase: true })
           return Promise.resolve()
-        }
-
-        generator.extensionConfig.isCustomization = true
-        const defaultExtensionList = ['publisher.extensionName']
-
-        const getExtensionList = () =>
-          new Promise((resolve, reject) => {
-            childProcess.exec('code --list-extensions', (error, stdout, stderr) => {
-              if (error) {
-                generator.env.error(error)
-              } else {
-                let out = stdout.trim()
-                if (out.length > 0) {
-                  generator.extensionConfig.extensionList = out.split(/\s/)
-                }
-              }
-              resolve()
-            })
-          })
-
-        const extensionParam = generator.options['extensionParam']
-        if (extensionParam) {
-          switch (
-            extensionParam
-              .toString()
-              .trim()
-              .toLowerCase()
-          ) {
-            case 'n':
-              generator.extensionConfig.extensionList = defaultExtensionList
-              return Promise.resolve()
-            case 'y':
-              return getExtensionList()
-          }
-        }
-
-        return generator
-          .prompt({
-            type: 'confirm',
-            name: 'addExtensions',
-            message: 'Add the currently installed extensions to the extension pack?',
-            default: true,
-          })
-          .then(addExtensionsAnswer => {
-            generator.extensionConfig.extensionList = defaultExtensionList
-            if (addExtensionsAnswer.addExtensions) {
-              return getExtensionList()
-            }
-          })
-      },
-
-      // Ask for extension display name ("displayName" in package.json)
-      askForExtensionDisplayName: () => {
-        let extensionDisplayName = generator.options['extensionDisplayName']
-        if (extensionDisplayName) {
-          generator.extensionConfig.displayName = extensionDisplayName
-          return Promise.resolve()
-        }
-
-        return generator
-          .prompt({
-            type: 'input',
-            name: 'displayName',
-            message: "What's the name of your extension?",
-            default: generator.extensionConfig.displayName,
-          })
-          .then(displayNameAnswer => {
-            generator.extensionConfig.displayName = displayNameAnswer.displayName
-          })
-      },
-
-      // Ask for extension id ("name" in package.json)
-      askForExtensionId: () => {
-        let extensionName = generator.options['extensionName']
-        if (extensionName) {
-          generator.extensionConfig.name = extensionName
-          return Promise.resolve()
-        }
-        let def = generator.extensionConfig.name
-        if (!def && generator.extensionConfig.displayName) {
-          def = generator.extensionConfig.displayName.toLowerCase().replace(/[^a-z0-9]/g, '-')
-        }
-        if (!def) {
-          def == ''
         }
 
         return generator
           .prompt({
             type: 'input',
             name: 'name',
-            message: "What's the identifier of your extension?",
-            default: def,
-            validate: validator.validateExtensionId,
+            message: "What's the name of your project?",
+            default: generator.extensionConfig.name,
+            validate: validator.isPluginId,
           })
-          .then(nameAnswer => {
-            generator.extensionConfig.name = nameAnswer.name
+          .then(displayNameAnswer => {
+            generator.extensionConfig.name = displayNameAnswer.name
+            generator.extensionConfig.displayName = camelCase(displayNameAnswer.name, {
+              pascalCase: true,
+            })
           })
       },
 
-      // Ask for extension description
-      askForExtensionDescription: () => {
-        let extensionDescription = generator.options['extensionDescription']
-        if (extensionDescription) {
-          generator.extensionConfig.description = extensionDescription
+      // 3. Ask for project description.
+      askForProjectDesc: () => {
+        const description = generator.options['description']
+        if (description) {
+          generator.extensionConfig.description = description
           return Promise.resolve()
         }
 
@@ -194,51 +108,59 @@ module.exports = class extends Generator {
           .prompt({
             type: 'input',
             name: 'description',
-            message: "What's the description of your extension?",
+            message: "What's the description of your project?",
+            default: 'A vango project generated by see generator.',
+          })
+          .then(nameAnswer => {
+            generator.extensionConfig.description = nameAnswer.description
+          })
+      },
+
+      // 4. Ask for project author
+      askForProjectAuthor: () => {
+        const author = generator.options['author']
+        if (author) {
+          generator.extensionConfig.author = author
+          return Promise.resolve()
+        }
+
+        return generator
+          .prompt({
+            type: 'input',
+            name: 'author',
+            message: "What's the author of your project?",
           })
           .then(descriptionAnswer => {
-            generator.extensionConfig.description = descriptionAnswer.description
+            generator.extensionConfig.author = descriptionAnswer.author
           })
       },
 
-      askForJavaScriptInfo: () => {
-        if (generator.extensionConfig.type !== 'ext-command-js') {
-          return Promise.resolve()
-        }
-        generator.extensionConfig.checkJavaScript = false
-        return generator
-          .prompt({
-            type: 'confirm',
-            name: 'checkJavaScript',
-            message: "Enable JavaScript type checking in 'jsconfig.json'?",
-            default: false,
-          })
-          .then(strictJavaScriptAnswer => {
-            generator.extensionConfig.checkJavaScript = strictJavaScriptAnswer.checkJavaScript
-          })
-      },
-
-      askForGit: () => {
-        if (generator.extensionConfig.type !== 'ext-command-js') {
+      // 5. Ask for project license
+      askForProjectLicense: () => {
+        const license = generator.options['license']
+        if (license) {
+          generator.extensionConfig.license = license
           return Promise.resolve()
         }
 
         return generator
           .prompt({
-            type: 'confirm',
-            name: 'gitInit',
-            message: 'Initialize a git repository?',
-            default: true,
+            type: 'input',
+            name: 'license',
+            message: "What's the license of your project?",
+            default: 'MIT',
           })
-          .then(gitAnswer => {
-            generator.extensionConfig.gitInit = gitAnswer.gitInit
+          .then(descriptionAnswer => {
+            generator.extensionConfig.license = descriptionAnswer.license
           })
       },
 
+      // 6. Ask for project license
       askForPackageManager: () => {
-        if (generator.extensionConfig.type !== 'ext-command-js') {
+        if (['vango-loader', 'vango-plugin'].indexOf(generator.extensionConfig.type) === -1) {
           return Promise.resolve()
         }
+
         generator.extensionConfig.pkgManager = 'npm'
         return generator
           .prompt({
@@ -260,6 +182,38 @@ module.exports = class extends Generator {
             generator.extensionConfig.pkgManager = pckgManagerAnswer.pkgManager
           })
       },
+
+      // 7. Ask for git
+      askForGit: () => {
+        return generator
+          .prompt({
+            type: 'confirm',
+            name: 'gitInit',
+            message: 'Initialize a git repository?',
+            default: true,
+          })
+          .then(gitAnswer => {
+            generator.extensionConfig.gitInit = gitAnswer.gitInit
+          })
+      },
+
+      // 8. Ask for git repo url
+      askForGitRepoUrl: () => {
+        generator.extensionConfig.gitRepo = 'https://github.com/your-name/your-repo-name'
+        if (!generator.extensionConfig.gitInit) {
+          return Promise.resolve()
+        }
+
+        return generator
+          .prompt({
+            type: 'confirm',
+            name: 'gitRepo',
+            message: "What's the url of your repository?",
+          })
+          .then(gitAnswer => {
+            generator.extensionConfig.gitRepo = gitAnswer.gitRepo
+          })
+      },
     }
 
     // run all prompts in sequence. Results can be ignored.
@@ -279,11 +233,11 @@ module.exports = class extends Generator {
     this.sourceRoot(path.join(__dirname, './templates/' + this.extensionConfig.type))
 
     switch (this.extensionConfig.type) {
-      case 'ext-command-js':
-        this._writingCommandJs()
+      case 'vango-loader':
+        this._writingVangoLoader()
         break
-      case 'ext-extensionpack':
-        this._writingExtensionPack()
+      case 'vango-plugin':
+        this._writingVangoPlugin()
         break
       default:
         //unknown project type
@@ -291,55 +245,68 @@ module.exports = class extends Generator {
     }
   }
 
-  // Write Color Theme Extension
-  _writingExtensionPack() {
-    let context = this.extensionConfig
+  // Write vango loader
+  _writingVangoLoader() {
+    const context = this.extensionConfig
 
-    this.fs.copy(this.sourceRoot() + '/vscode', context.name + '/.vscode')
-    this.fs.copyTpl(this.sourceRoot() + '/package.json', context.name + '/package.json', context)
-    this.fs.copyTpl(
-      this.sourceRoot() + '/vsc-extension-quickstart.md',
-      context.name + '/vsc-extension-quickstart.md',
-      context,
-    )
-    this.fs.copyTpl(this.sourceRoot() + '/README.md', context.name + '/README.md', context)
-    this.fs.copyTpl(this.sourceRoot() + '/CHANGELOG.md', context.name + '/CHANGELOG.md', context)
-    this.fs.copy(this.sourceRoot() + '/vscodeignore', context.name + '/.vscodeignore')
-    if (this.extensionConfig.gitInit) {
-      this.fs.copy(this.sourceRoot() + '/gitignore', context.name + '/.gitignore')
-      this.fs.copy(this.sourceRoot() + '/gitattributes', context.name + '/.gitattributes')
+    this.fs.copy(this.sourceRoot() + '/docs', context.name + '/docs')
+    this.fs.copy(this.sourceRoot() + '/samples', context.name + '/samples')
+    this.fs.copy(this.sourceRoot() + '/tests', context.name + '/tests')
+    this.fs.copy(this.sourceRoot() + '/src/cjs.js', context.name + '/src/cjs.js')
+    this.fs.copyTpl(this.sourceRoot() + '/src/index.js', context.name + '/src/index.js', context)
+
+    if (context.gitInit) {
+      this.fs.copy(this.sourceRoot() + '/.gitignore', context.name + '/.gitignore')
     }
+
+    this.fs.copy(this.sourceRoot() + '/.all-contributorsrc', context.name + '/.all-contributorsrc')
+    this.fs.copy(this.sourceRoot() + '/.editorconfig', context.name + '/.editorconfig')
+    this.fs.copy(this.sourceRoot() + '/eslintignore', context.name + '/.eslintignore')
+    this.fs.copy(this.sourceRoot() + '/eslintrc', context.name + '/.eslintrc')
+    this.fs.copy(this.sourceRoot() + '/prettierignore', context.name + '/.prettierignore')
+    this.fs.copy(this.sourceRoot() + '/prettierrc', context.name + '/.prettierrc')
+    this.fs.copy(this.sourceRoot() + '/.yarnrc', context.name + '/.yarnrc')
+    this.fs.copyTpl(this.sourceRoot() + '/CHANGELOG.md', context.name + '/CHANGELOG.md', context)
+    this.fs.copy(this.sourceRoot() + '/CONTRIBUTING.md', context.name + '/CONTRIBUTING.md')
+    this.fs.copy(this.sourceRoot() + '/CONTRIBUTORS.md', context.name + '/CONTRIBUTORS.md')
+    this.fs.copy(this.sourceRoot() + '/jest.config.js', context.name + '/jest.config.js')
+    this.fs.copy(this.sourceRoot() + '/jest.setup.js', context.name + '/jest.setup.js')
+    this.fs.copyTpl(this.sourceRoot() + '/LICENSE.md', context.name + '/LICENSE.md', context)
+    this.fs.copyTpl(this.sourceRoot() + '/package.json', context.name + '/package.json', context)
+    this.fs.copyTpl(this.sourceRoot() + '/README.md', context.name + '/README.md', context)
+
+    this.extensionConfig.installDependencies = true
   }
 
-  // Write Command Extension (JavaScript)
-  _writingCommandJs() {
-    let context = this.extensionConfig
+  // Write vango plugin
+  _writingVangoPlugin() {
+    const context = this.extensionConfig
 
-    this.fs.copy(this.sourceRoot() + '/vscode', context.name + '/.vscode')
-    this.fs.copy(this.sourceRoot() + '/test', context.name + '/test')
+    this.fs.copy(this.sourceRoot() + '/docs', context.name + '/docs')
+    this.fs.copy(this.sourceRoot() + '/samples', context.name + '/samples')
+    this.fs.copy(this.sourceRoot() + '/tests', context.name + '/tests')
+    this.fs.copy(this.sourceRoot() + '/src/cjs.js', context.name + '/src/cjs.js')
+    this.fs.copyTpl(this.sourceRoot() + '/src/index.js', context.name + '/src/index.js', context)
 
-    this.fs.copy(this.sourceRoot() + '/vscodeignore', context.name + '/.vscodeignore')
-
-    if (this.extensionConfig.gitInit) {
-      this.fs.copy(this.sourceRoot() + '/gitignore', context.name + '/.gitignore')
+    if (context.gitInit) {
+      this.fs.copy(this.sourceRoot() + '/.gitignore', context.name + '/.gitignore')
     }
 
-    this.fs.copyTpl(this.sourceRoot() + '/README.md', context.name + '/README.md', context)
+    this.fs.copy(this.sourceRoot() + '/.all-contributorsrc', context.name + '/.all-contributorsrc')
+    this.fs.copy(this.sourceRoot() + '/.editorconfig', context.name + '/.editorconfig')
+    this.fs.copy(this.sourceRoot() + '/eslintignore', context.name + '/.eslintignore')
+    this.fs.copy(this.sourceRoot() + '/eslintrc', context.name + '/.eslintrc')
+    this.fs.copy(this.sourceRoot() + '/prettierignore', context.name + '/.prettierignore')
+    this.fs.copy(this.sourceRoot() + '/prettierrc', context.name + '/.prettierrc')
+    this.fs.copy(this.sourceRoot() + '/.yarnrc', context.name + '/.yarnrc')
     this.fs.copyTpl(this.sourceRoot() + '/CHANGELOG.md', context.name + '/CHANGELOG.md', context)
-    this.fs.copyTpl(
-      this.sourceRoot() + '/vsc-extension-quickstart.md',
-      context.name + '/vsc-extension-quickstart.md',
-      context,
-    )
-    this.fs.copyTpl(this.sourceRoot() + '/jsconfig.json', context.name + '/jsconfig.json', context)
-
-    this.fs.copyTpl(this.sourceRoot() + '/extension.js', context.name + '/extension.js', context)
+    this.fs.copy(this.sourceRoot() + '/CONTRIBUTING.md', context.name + '/CONTRIBUTING.md')
+    this.fs.copy(this.sourceRoot() + '/CONTRIBUTORS.md', context.name + '/CONTRIBUTORS.md')
+    this.fs.copy(this.sourceRoot() + '/jest.config.js', context.name + '/jest.config.js')
+    this.fs.copy(this.sourceRoot() + '/jest.setup.js', context.name + '/jest.setup.js')
+    this.fs.copyTpl(this.sourceRoot() + '/LICENSE.md', context.name + '/LICENSE.md', context)
     this.fs.copyTpl(this.sourceRoot() + '/package.json', context.name + '/package.json', context)
-    this.fs.copyTpl(
-      this.sourceRoot() + '/.eslintrc.json',
-      context.name + '/.eslintrc.json',
-      context,
-    )
+    this.fs.copyTpl(this.sourceRoot() + '/README.md', context.name + '/README.md', context)
 
     this.extensionConfig.installDependencies = true
   }
@@ -365,27 +332,7 @@ module.exports = class extends Generator {
     }
 
     this.log('')
-    this.log('Your extension ' + this.extensionConfig.name + ' has been created!')
+    this.log('Your project ' + this.extensionConfig.name + ' has been created!')
     this.log('')
-    this.log('To start editing with Visual Studio Code, use the following commands:')
-    this.log('')
-    this.log('     cd ' + this.extensionConfig.name)
-    this.log('     code .')
-    this.log('')
-    this.log('Open vsc-extension-quickstart.md inside the new extension for further instructions')
-    this.log('on how to modify, test and publish your extension.')
-    this.log('')
-
-    if (this.extensionConfig.type === 'ext-extensionpack') {
-      this.log(
-        chalk.yellow(
-          'Please review the "extensionPack" in the "package.json" before publishing the extension pack.',
-        ),
-      )
-      this.log('')
-    }
-
-    this.log('For more information, also visit http://code.visualstudio.com and follow us @code.')
-    this.log('\r\n')
   }
 }

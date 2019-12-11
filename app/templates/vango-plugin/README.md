@@ -1,0 +1,9 @@
+# <%= name %>
+
+
+# Install
+
+
+## License
+
+<%= license %>
